@@ -1,14 +1,13 @@
 [Move]
 Byte explaination:
 
-1-4: ?
+1-4: ?  fixed header
 4d5a0000 
 
 5-8: time stamp
 ?
 
-9-10: ?
-?
+9-10: following length
 
 11-12: may means the action of move
 f0c2 
@@ -16,6 +15,7 @@ f0c2
 13-16: server info
 每次打开游戏以后这个值就由服务器区组决定了
 关闭游戏重开服务器区组对应值就变了
+不需要关闭游戏，游戏内环线也同样会改变
 
 17-18: ?
 0000
@@ -28,10 +28,33 @@ f0c2
 5dc0 官道北
 1388 天墉城
 
+PS by Abyss: 我觉得17-20可能是4 byte一起表示一个区域代码？
+
+21-22:  steps
+
+following steps locations
+
+then with face direction( clockwise ):
+0000  left
+0001  up-left
+0002  up
+0003  up-right
+0004  right
+0005  down-right
+0006  down
+0007  down-left
+
+last 4 Byte:  Still time stamp
 
 
 
 
 
+
+问题：
+1. 游戏客户端寻路的分解怎么捕获？
+2. 短距离有时候他会分包发，和移动点的多少没有直接关系，不知道是因为什么原因造成的。
+3. 时间戳怎么确定如何计算？在游戏连接以后就会从服务器给出一个起始时间么？递增的确只要local time累加就行了。
+4. 如何确定服务器信息那几个字段，从服务器返回的什么包里会有相应信息？
 
 
