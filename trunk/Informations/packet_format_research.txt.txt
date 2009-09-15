@@ -1,0 +1,37 @@
+[Move]
+Byte explaination:
+
+1-4: ?
+4d5a0000 
+
+5-8: time stamp
+?
+
+9-10: ?
+?
+
+11-12: may means the action of move
+f0c2 
+
+13-16: server info
+每次打开游戏以后这个值就由服务器区组决定了
+关闭游戏重开服务器区组对应值就变了
+
+17-18: ?
+0000
+
+19-20 Byte: map location
+03e8 揽仙镇
+07d0 揽仙镇外
+0bb8 卧龙坡
+0fa0 官道南
+5dc0 官道北
+1388 天墉城
+
+
+
+
+
+
+
+
