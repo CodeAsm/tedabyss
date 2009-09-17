@@ -103,8 +103,151 @@ TCP_HDR  *tcpheader;
 UDP_HDR  *udpheader;
 ICMP_HDR *icmpheader;
 
+#define TEST 1
+
+#define DEFAULT_PORT 9010
+#define TEST_SERVER "203.110.170.155"
+
+class MovePacket
+{
+public:
+	MovePacket(DWORD* locationArray, WORD stepNum, DWORD timeStamp, DWORD serverInfo, DWORD area, WORD faceDir = 0)
+	{
+		WORD packet_len = 18+stepNum*4;
+		Size = packet_len+10;
+		Data = new BYTE[Size];
+
+		INT index = 0;
+		DWORD fixed = 0x4d5a0000;
+		WORD action = 0xf0c2;
+		memcpy(&Data[index],&fixed,4);
+		index += 4;
+		memcpy(&Data[index],&timeStamp,4);
+		index += 4;
+		memcpy(&Data[index],&packet_len,2);
+		index += 2;
+		memcpy(&Data[index],&action,2);
+		index += 2;
+		memcpy(&Data[index],&serverInfo,4);
+		index += 4;
+		memcpy(&Data[index],&stepNum,2);
+		index += 2;
+
+		for(INT i=0;i<stepNum;i++)
+		{
+			memcpy(&Data[index],&locationArray[i],4);
+			index += 4;
+		}
+
+		memcpy(&Data[index],&faceDir,2);
+		index += 2;
+		memcpy(&Data[index],&timeStamp,4);
+		index += 4;
+	}
+
+	virtual ~MovePacket()
+	{
+		if(Data)
+		{
+			delete [] Data;
+		}
+	}
+
+	BYTE* GetData()
+	{
+		return &Data[0];
+	}
+
+	WORD GetSize()
+	{
+		return Size;
+	}
+
+private:
+	BYTE* Data;
+	WORD Size;
+};
+
+
 int _tmain(int argc, _TCHAR* argv[])
 {
+
+		
+#if defined(TEST)
+
+	WSADATA wsa;	
+
+	//Initialise Winsock
+	printf("\nInitialising Winsock...");
+	if (WSAStartup(MAKEWORD(2,2), &wsa) != 0)
+	{
+		printf("WSAStartup() failed.\n");
+		return 1;
+	}
+    printf("Initialised");
+
+	//----------------------
+    // Create a SOCKET for connecting to server
+	SOCKET ConnectSocket;
+    struct sockaddr_in clientService; 
+
+	DWORD locations[3] = {0x00300025,0x002f0025,0x002e0025};
+	DWORD timestamp = 0x00fb3000;
+	DWORD serverinfo = 0x0002ae05;
+	DWORD area = 0x0000138c;
+	MovePacket packet(locations,3,timestamp,serverinfo,area);
+
+    ConnectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (ConnectSocket == INVALID_SOCKET) {
+        printf("socket failed with error: %ld\n", WSAGetLastError());
+        WSACleanup();
+        return 1;
+    }
+
+    //----------------------
+    // The sockaddr_in structure specifies the address family,
+    // IP address, and port of the server to be connected to.
+    clientService.sin_family = AF_INET;
+    clientService.sin_addr.s_addr = inet_addr( TEST_SERVER );
+    clientService.sin_port = htons( DEFAULT_PORT );
+
+    //----------------------
+    // Connect to server.
+	int iResult;
+    iResult = connect( ConnectSocket, (SOCKADDR*) &clientService, sizeof(clientService) );
+    if (iResult == SOCKET_ERROR) {
+        printf( "connect failed with error: %d\n", WSAGetLastError() );
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return 1;
+  }
+
+    //----------------------
+    // Send an initial buffer
+	iResult = send( ConnectSocket, (const char*)packet.GetData(), packet.GetSize(), 0 );
+    if (iResult == SOCKET_ERROR) {
+        printf("send() failed with error: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    printf("Bytes Sent: %d\n", iResult);
+
+    // shutdown the connection since no more data will be sent
+    iResult = shutdown(ConnectSocket, SD_SEND);
+    if (iResult == SOCKET_ERROR) {
+        printf("shutdown failed with error: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return 1;
+    }
+
+	while(1);
+
+	return 1;
+#else
+
 	SOCKET sniffer;
 	struct in_addr addr;
 	DWORD in;	
@@ -124,8 +267,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		return 1;
 	}
     printf("Initialised");
-		
-	//Create a RAW Socket
+
+		//Create a RAW Socket
 	printf("\nCreating RAW Socket...");
 	sniffer = socket(AF_INET, SOCK_RAW, IPPROTO_IP);
     if (sniffer == INVALID_SOCKET)
@@ -195,6 +338,9 @@ int _tmain(int argc, _TCHAR* argv[])
 	WSACleanup();
 
 	return 0;
+#endif
+
+
 }
 
 void StartSniffing(SOCKET sniffer)
