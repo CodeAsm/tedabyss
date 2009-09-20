@@ -2,7 +2,8 @@
 //
 
 #include "stdafx.h"
-#include <winsock.h>
+//#include <winsock.h>
+#include <winsock2.h>
 #include <io.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -427,11 +428,13 @@ void GetFileName(char *fname)
 	strcpy(fname, &temp[i]);
 }
 
-int WriteBinData(char *function, char *buf, int len)
+int WriteBinData(char *function, char *buf, int len, SOCKET s)
 {
 	char mod_name[100];
 	char fname[128];
 	if(len <=0) return 0;
+
+	static bool bSocketTransfered = false;
 
 	GetFileName(mod_name);
 	if( strstr( mod_name, "asktao" ) != NULL )
@@ -480,8 +483,53 @@ int WriteBinData(char *function, char *buf, int len)
 
 			Locations[0].Y = pMove->GetLocation(pMove->GetStepNum()-1).Y-1;
 			DummyPacket.SetActionPacket( new MovePacket( pMove->GetServerInfo(), pMove->GetArea(), 1, Locations, 0, DummyPacket.CalcTimeStamp() ) );
-
 			//send(s, (char *)DummyPacket.GetData(), DummyPacket.GetSize(), flags);
+
+			if( !bSocketTransfered )
+			{
+				WSAPROTOCOL_INFO  WSAProtocolInfo;
+				HWND hwnd = FindWindowA( "ConsoleWindowClass", "e:\\My Documents\\My Projects\\TedAbyss\\trunk\\Test\\HookGame\\HookGame\\Bin\\HookGame.exe" );
+				DWORD ProcessId = 0;
+				GetWindowThreadProcessId( hwnd, &ProcessId );
+				wsprintfA(temp, "\r\n[Duplicate Socket] FindWindow Result: Handle: %x, PID: %x", hwnd, ProcessId );
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+				WSADuplicateSocket( s, ProcessId, &WSAProtocolInfo );
+
+				SOCKET transportSocket;
+				transportSocket = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
+				sockaddr_in clientService;
+				clientService.sin_family = AF_INET;
+				clientService.sin_addr.s_addr = inet_addr("127.0.0.1");
+				clientService.sin_port = htons( 2001 );
+				if(connect(transportSocket, (SOCKADDR*) &clientService, sizeof(clientService) ) == SOCKET_ERROR)
+				{
+					wsprintfA(temp, "\r\n[ConnectError] %ld", WSAGetLastError() );
+					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+					//WSACleanup();
+					//return -1;
+				}
+				INT sendSize = sizeof(WSAProtocolInfo);
+				if (send(transportSocket, (char*) &WSAProtocolInfo, sendSize, 0) == SOCKET_ERROR) 
+				{
+					wsprintfA(temp, "\r\n[SendError] %ld", WSAGetLastError() );
+					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+					//WSACleanup();
+					//return 1;
+				}
+				wsprintfA(temp, "\r\n[SendSocket] Size: %d", sendSize );
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+				// shutdown the connection since no more data will be sent
+				if (shutdown(transportSocket, SD_SEND) == SOCKET_ERROR) 
+				{
+					wsprintfA(temp, "\r\n[ShutdownError] %ld", WSAGetLastError() );
+					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+					//WSACleanup();
+					//return 1;
+				}
+				closesocket(transportSocket);
+				bSocketTransfered = true;
+			}
 
 			break;
 		default:
@@ -508,7 +556,7 @@ int WINAPI mysend(SOCKET s,	char *buf, int len,	int flags)
 {
 	int ret;
 
-	WriteBinData("send", buf, len);
+	WriteBinData("send", buf, len, s);
 	ret =send(s, (char *)buf, len, flags);
 
 	int err;
