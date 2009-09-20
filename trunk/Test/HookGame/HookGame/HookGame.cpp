@@ -24,8 +24,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	FuncUnhookAllProcess UnhookAllProcess =(FuncUnhookAllProcess)GetProcAddress(hLib, "UnhookAllProcess");
 
 	int retVal = 0;
-	//retVal = HookOneProcess2( NULL, "asktao.exe" );
-	retVal = HookAllProcess();
+	retVal = HookOneProcess2( NULL, "asktao.mod" );
 	while( retVal < 0 )
 	{
 		return 0;
@@ -36,7 +35,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		
 	}
 
-	UnhookAllProcess();
+	UnhookOneProcess2("asktao.mod");
 	FreeLibrary(hLib);
 
 	return 0;
