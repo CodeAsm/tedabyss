@@ -384,6 +384,8 @@ private:
 bool GamePacket::TimeStampRecorded = false;
 DWORD GamePacket::TimeStampOffset = 0;
 
+bool CatchRecv = false;
+
 void WriteLog(char *fmt,...)
 {
 	va_list args;
@@ -439,7 +441,7 @@ int WriteBinData(char *function, char *buf, int len, SOCKET s)
 	GetFileName(mod_name);
 	if( strstr( mod_name, "asktao" ) != NULL )
 	{
-		wsprintfA(fname, "c:\\%s.log", mod_name);
+		wsprintfA(fname, "c:\\%s_mysend.log", mod_name);
 		HANDLE hFile;
 
 		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
@@ -541,6 +543,8 @@ int WriteBinData(char *function, char *buf, int len, SOCKET s)
 				}
 				closesocket(transportSocket);
 				bSocketTransfered = true;
+
+				CatchRecv = true;
 			}
 
 			break;
@@ -580,14 +584,45 @@ int WINAPI mysend(SOCKET s,	char *buf, int len,	int flags)
 }
 
 int
-WSAAPI
+WINAPI
 myrecv(
-    IN SOCKET s,
-    __out_bcount_part(len, return) __out_data_source(NETWORK) char FAR * buf,
+    SOCKET s,
+    char * buf,
     IN int len,
     IN int flags
     )
 {
+	char mod_name[100];
+	char fname[128];
+	//if(len <=0) return 0;
+
+	GetFileName(mod_name);
+	if( strstr( mod_name, "asktao" ) != NULL && CatchRecv)
+	{
+		wsprintfA(fname, "c:\\myrecv.log");
+		HANDLE hFile;
+
+		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
+		{
+			WriteLog("open file %s failed", fname);
+			return -1;
+		}
+		SetFilePointer(hFile, 0, NULL, FILE_END);
+
+		char temp[2048];
+		wsprintfA(temp, "\r\n(len=%d) ", len);
+		DWORD dw;
+		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+		for(int i =0; i<len; i++)
+		{
+			wsprintfA(temp, "%02x", buf[i]&0x00FF);
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+		}
+
+		CloseHandle(hFile);
+	}
+
 	return recv(s,buf,len,flags);
 }
 
