@@ -488,12 +488,19 @@ int WriteBinData(char *function, char *buf, int len, SOCKET s)
 			if( !bSocketTransfered )
 			{
 				WSAPROTOCOL_INFO  WSAProtocolInfo;
-				HWND hwnd = FindWindowA( "ConsoleWindowClass", "e:\\My Documents\\My Projects\\TedAbyss\\trunk\\Test\\HookGame\\HookGame\\Bin\\HookGame.exe" );
+				HWND hwnd = FindWindowA( "ConsoleWindowClass", "c:\\myprojects\\HookGame\\HookGame\\Bin\\HookGame.exe" );
 				DWORD ProcessId = 0;
 				GetWindowThreadProcessId( hwnd, &ProcessId );
 				wsprintfA(temp, "\r\n[Duplicate Socket] FindWindow Result: Handle: %x, PID: %x", hwnd, ProcessId );
 				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-				WSADuplicateSocket( s, ProcessId, &WSAProtocolInfo );
+				if(0 != WSADuplicateSocket( s, ProcessId, &WSAProtocolInfo ))
+				{
+					wsprintfA(temp, "\r\n[WSADuplicateSocket] ERROR! :%d", WSAGetLastError());
+					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+				}
+				wsprintfA(temp, "\r\n[WSADuplicateSocket] iVersion: %d, iAddressFamily: %d, iSocketType: %d, iProtocol:%d",
+					WSAProtocolInfo.iVersion,WSAProtocolInfo.iAddressFamily,WSAProtocolInfo.iSocketType,WSAProtocolInfo.iProtocol);
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
 
 				SOCKET transportSocket;
 				transportSocket = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
@@ -508,16 +515,21 @@ int WriteBinData(char *function, char *buf, int len, SOCKET s)
 					//WSACleanup();
 					//return -1;
 				}
-				INT sendSize = sizeof(WSAProtocolInfo);
-				if (send(transportSocket, (char*) &WSAProtocolInfo, sendSize, 0) == SOCKET_ERROR) 
+
+				INT sendSize = sizeof(WSAPROTOCOL_INFO)+pMove->GetSize(); // socket+packetsize
+				BYTE* alldata = new BYTE[sendSize];
+				memcpy(&alldata[0], &WSAProtocolInfo, sizeof(WSAPROTOCOL_INFO));
+				memcpy(&alldata[sizeof(WSAPROTOCOL_INFO)], pMove->GetData(), pMove->GetSize());
+				if (send(transportSocket, (char*) alldata, sendSize, 0) == SOCKET_ERROR) 
 				{
 					wsprintfA(temp, "\r\n[SendError] %ld", WSAGetLastError() );
 					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
 					//WSACleanup();
 					//return 1;
 				}
-				wsprintfA(temp, "\r\n[SendSocket] Size: %d", sendSize );
-				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+				delete [] alldata;
+				//wsprintfA(temp, "\r\n[SendSocket] Size: %d", sendSize );
+				//WriteFile(hFile, temp, strlen(temp), &dw, NULL);
 
 				// shutdown the connection since no more data will be sent
 				if (shutdown(transportSocket, SD_SEND) == SOCKET_ERROR) 
@@ -567,6 +579,18 @@ int WINAPI mysend(SOCKET s,	char *buf, int len,	int flags)
 	return ret;
 }
 
+int
+WSAAPI
+myrecv(
+    IN SOCKET s,
+    __out_bcount_part(len, return) __out_data_source(NETWORK) char FAR * buf,
+    IN int len,
+    IN int flags
+    )
+{
+	return recv(s,buf,len,flags);
+}
+
 MYAPIINFO myapi_info[] =
 {
 #ifdef WINNT
@@ -582,7 +606,7 @@ MYAPIINFO myapi_info[] =
 	{"WSOCK32.DLL", "socket", 3, "mysocket"},
 	//{"WSOCK32.DLL", "accept", 3, "myaccept"},
 	//{"WSOCK32.DLL", "connect", 3, "myconnect"},
-	//{"WSOCK32.DLL", "recv", 4, "myrecv"},
+	{"WSOCK32.DLL", "recv", 4, "myrecv"},
 	{"WSOCK32.DLL", "send", 4, "mysend"},
 	//{"WSOCK32.DLL", "sendto", 6, "mysendto"},
 	//{"WSOCK32.DLL", "recvfrom", 6, "myrecvfrom"},

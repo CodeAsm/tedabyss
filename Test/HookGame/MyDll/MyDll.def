@@ -1,4 +1,6 @@
 EXPORTS
 	GetMyAPIInfo
 	mysocket
+	myrecv
 	mysend
+	
