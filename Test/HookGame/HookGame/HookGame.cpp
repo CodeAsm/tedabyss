@@ -568,8 +568,6 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	while( true )
 	{
-		Sleep(1020);
-
 		WORD step_num = 10;
 		LocationPoint location_ = original_packet.GetLocation(original_packet.GetStepNum()-1);
 		LocationPoint points[10];
@@ -586,6 +584,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		DWORD time_stamp__ = ((SysTime.wHour*60+SysTime.wMinute)*60+SysTime.wSecond)*1000 + SysTime.wMilliseconds - 
 			((catched_sys_time.wHour*60+catched_sys_time.wMinute)*60+catched_sys_time.wSecond)*1000 + catched_sys_time.wMilliseconds 
 			+ original_packet.GetTimeStamp();
+
+
+
 		MovePacket test_packet(original_packet.GetServerInfo(),original_packet.GetArea(),step_num,points,original_packet.GetFaceDir(),time_stamp__);
 		if (send(DuplicatedSocket, (char*) test_packet.GetData(), sizeof(test_packet), 0) == SOCKET_ERROR) 
 		{
@@ -594,6 +595,31 @@ int _tmain(int argc, _TCHAR* argv[])
 			//return 1;
 		}		
 		
+		char fname[128];
+		wsprintfA(fname, "c:\\TestLog\\HookGame_send.log");
+		HANDLE hFile;
+
+		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
+		{
+			//WriteLog("open file %s failed", fname);
+			return 0;
+		}
+		SetFilePointer(hFile, 0, NULL, FILE_END);
+
+		BYTE* print_data = test_packet.GetData();
+		char temp[2048];
+		wsprintfA(temp, "\r\n(len=%d) ", test_packet.GetSize());
+		DWORD dw;
+		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+		for(int i =0; i<test_packet.GetSize(); i++)
+		{
+			wsprintfA(temp, "%02x", print_data[i]&0x00FF);
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+		}
+
+		CloseHandle(hFile);
+
 		break;
 		//cout << "Input Steps:";
 		//cin >> Steps;
