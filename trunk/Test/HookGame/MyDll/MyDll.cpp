@@ -432,135 +432,130 @@ void GetFileName(char *fname)
 
 int WriteBinData(char *function, char *buf, int len, SOCKET s)
 {
-	char mod_name[100];
 	char fname[128];
 	if(len <=0) return 0;
 
 	static bool bSocketTransfered = false;
 
-	GetFileName(mod_name);
-	if( strstr( mod_name, "asktao" ) != NULL )
+	wsprintfA(fname, "c:\\TestLog\\mysend.log");
+	HANDLE hFile;
+
+	if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
 	{
-		wsprintfA(fname, "c:\\%s_mysend.log", mod_name);
-		HANDLE hFile;
-
-		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
-		{
-			WriteLog("open file %s failed", fname);
-			return -1;
-		}
-		SetFilePointer(hFile, 0, NULL, FILE_END);
-
-		GamePacket gamePacket( (BYTE*)buf, len );
-		ActionPacket* pAction = gamePacket.GetAction();
-		MovePacket* pMove = (MovePacket*)pAction;
-		LocationPoint  Locations[1];
-		GamePacket DummyPacket;
-
-		switch( gamePacket.GetActionType() )
-		{
-		case EActionType_Move:
-			char temp[2048];
-			wsprintfA(temp, "\r\n(%s,len=%d) ", function, len);
-			DWORD dw;
-			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-
-			for(int i =0; i<len; i++)
-			{
-				wsprintfA(temp, "%02x", buf[i]&0x00FF);
-				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-			}
-
-			SYSTEMTIME  SysTime;
-			GetSystemTime( &SysTime );
-			wsprintfA(temp, "\r\n[Move] SeverInfo: %x, Area:%x, StepNum:%x, FaceDir:%x, TimeStamp:%x, SystemTime:%x:%x:%x, CalcTimeStamp:%x", 
-				pMove->GetServerInfo(), pMove->GetArea(), pMove->GetStepNum(), pMove->GetFaceDir(), pMove->GetTimeStamp(), 
-				SysTime.wMinute, SysTime.wSecond, SysTime.wMilliseconds, gamePacket.CalcTimeStamp() );
-			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-			for ( int i = 0; i < (int)pMove->GetStepNum(); ++i )
-			{
-				wsprintfA(temp, "\r\nLocation[%d]: %d, %d", i, pMove->GetLocation(i).X, pMove->GetLocation(i).Y );
-				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-			}
-
-			Locations[0].Y = pMove->GetLocation(pMove->GetStepNum()-1).Y-1;
-			DummyPacket.SetActionPacket( new MovePacket( pMove->GetServerInfo(), pMove->GetArea(), 1, Locations, 0, DummyPacket.CalcTimeStamp() ) );
-			//send(s, (char *)DummyPacket.GetData(), DummyPacket.GetSize(), flags);
-
-			if( !bSocketTransfered )
-			{
-				WSAPROTOCOL_INFO  WSAProtocolInfo;
-				HWND hwnd = FindWindowA( "ConsoleWindowClass", "c:\\myprojects\\HookGame\\HookGame\\Bin\\HookGame.exe" );
-				DWORD ProcessId = 0;
-				GetWindowThreadProcessId( hwnd, &ProcessId );
-				wsprintfA(temp, "\r\n[Duplicate Socket] FindWindow Result: Handle: %x, PID: %x", hwnd, ProcessId );
-				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-				if(0 != WSADuplicateSocket( s, ProcessId, &WSAProtocolInfo ))
-				{
-					wsprintfA(temp, "\r\n[WSADuplicateSocket] ERROR! :%d", WSAGetLastError());
-					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-				}
-				wsprintfA(temp, "\r\n[WSADuplicateSocket] iVersion: %d, iAddressFamily: %d, iSocketType: %d, iProtocol:%d",
-					WSAProtocolInfo.iVersion,WSAProtocolInfo.iAddressFamily,WSAProtocolInfo.iSocketType,WSAProtocolInfo.iProtocol);
-				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-
-				SOCKET transportSocket;
-				transportSocket = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
-				sockaddr_in clientService;
-				clientService.sin_family = AF_INET;
-				clientService.sin_addr.s_addr = inet_addr("127.0.0.1");
-				clientService.sin_port = htons( 2001 );
-				if(connect(transportSocket, (SOCKADDR*) &clientService, sizeof(clientService) ) == SOCKET_ERROR)
-				{
-					wsprintfA(temp, "\r\n[ConnectError] %ld", WSAGetLastError() );
-					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-					//WSACleanup();
-					//return -1;
-				}
-
-				INT sendSize = sizeof(WSAPROTOCOL_INFO)+pMove->GetSize(); // socket+packetsize
-				BYTE* alldata = new BYTE[sendSize];
-				memcpy(&alldata[0], &WSAProtocolInfo, sizeof(WSAPROTOCOL_INFO));
-				memcpy(&alldata[sizeof(WSAPROTOCOL_INFO)], pMove->GetData(), pMove->GetSize());
-				if (send(transportSocket, (char*) alldata, sendSize, 0) == SOCKET_ERROR) 
-				{
-					wsprintfA(temp, "\r\n[SendError] %ld", WSAGetLastError() );
-					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-					//WSACleanup();
-					//return 1;
-				}
-				delete [] alldata;
-				//wsprintfA(temp, "\r\n[SendSocket] Size: %d", sendSize );
-				//WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-
-				// shutdown the connection since no more data will be sent
-				if (shutdown(transportSocket, SD_SEND) == SOCKET_ERROR) 
-				{
-					wsprintfA(temp, "\r\n[ShutdownError] %ld", WSAGetLastError() );
-					WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-					//WSACleanup();
-					//return 1;
-				}
-				closesocket(transportSocket);
-				bSocketTransfered = true;
-
-				CatchRecv = true;
-			}
-
-			break;
-		default:
-			break;
-		}
-
-		CloseHandle(hFile);
+		//WriteLog("open file %s failed", fname);
+		return -1;
 	}
+	SetFilePointer(hFile, 0, NULL, FILE_END);
+
+	GamePacket gamePacket( (BYTE*)buf, len );
+	ActionPacket* pAction = gamePacket.GetAction();
+	MovePacket* pMove = (MovePacket*)pAction;
+	LocationPoint  Locations[1];
+	GamePacket DummyPacket;
+
+	switch( gamePacket.GetActionType() )
+	{
+	case EActionType_Move:
+		char temp[2048];
+		wsprintfA(temp, "\r\n(%s,len=%d) ", function, len);
+		DWORD dw;
+		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+		for(int i =0; i<len; i++)
+		{
+			wsprintfA(temp, "%02x", buf[i]&0x00FF);
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+		}
+
+		SYSTEMTIME  SysTime;
+		GetSystemTime( &SysTime );
+		wsprintfA(temp, "\r\n[Move] SeverInfo: %x, Area:%x, StepNum:%x, FaceDir:%x, TimeStamp:%x, SystemTime:%x:%x:%x, CalcTimeStamp:%x", 
+			pMove->GetServerInfo(), pMove->GetArea(), pMove->GetStepNum(), pMove->GetFaceDir(), pMove->GetTimeStamp(), 
+			SysTime.wMinute, SysTime.wSecond, SysTime.wMilliseconds, gamePacket.CalcTimeStamp() );
+		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+		for ( int i = 0; i < (int)pMove->GetStepNum(); ++i )
+		{
+			wsprintfA(temp, "\r\nLocation[%d]: %d, %d", i, pMove->GetLocation(i).X, pMove->GetLocation(i).Y );
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+		}
+
+		Locations[0].Y = pMove->GetLocation(pMove->GetStepNum()-1).Y-1;
+		DummyPacket.SetActionPacket( new MovePacket( pMove->GetServerInfo(), pMove->GetArea(), 1, Locations, 0, DummyPacket.CalcTimeStamp() ) );
+		//send(s, (char *)DummyPacket.GetData(), DummyPacket.GetSize(), flags);
+
+		if( !bSocketTransfered )
+		{
+			WSAPROTOCOL_INFO  WSAProtocolInfo;
+			HWND hwnd = FindWindowA( "ConsoleWindowClass", "c:\\myprojects\\HookGame\\HookGame\\Bin\\HookGame.exe" );
+			DWORD ProcessId = 0;
+			GetWindowThreadProcessId( hwnd, &ProcessId );
+			wsprintfA(temp, "\r\n[Duplicate Socket] FindWindow Result: Handle: %x, PID: %x", hwnd, ProcessId );
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+			if(0 != WSADuplicateSocket( s, ProcessId, &WSAProtocolInfo ))
+			{
+				wsprintfA(temp, "\r\n[WSADuplicateSocket] ERROR! :%d", WSAGetLastError());
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+			}
+			wsprintfA(temp, "\r\n[WSADuplicateSocket] iVersion: %d, iAddressFamily: %d, iSocketType: %d, iProtocol:%d",
+				WSAProtocolInfo.iVersion,WSAProtocolInfo.iAddressFamily,WSAProtocolInfo.iSocketType,WSAProtocolInfo.iProtocol);
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+			SOCKET transportSocket;
+			transportSocket = socket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
+			sockaddr_in clientService;
+			clientService.sin_family = AF_INET;
+			clientService.sin_addr.s_addr = inet_addr("127.0.0.1");
+			clientService.sin_port = htons( 2001 );
+			if(connect(transportSocket, (SOCKADDR*) &clientService, sizeof(clientService) ) == SOCKET_ERROR)
+			{
+				wsprintfA(temp, "\r\n[ConnectError] %ld", WSAGetLastError() );
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+				//WSACleanup();
+				//return -1;
+			}
+
+			INT sendSize = sizeof(WSAPROTOCOL_INFO)+pMove->GetSize(); // socket+packetsize
+			BYTE* alldata = new BYTE[sendSize];
+			memcpy(&alldata[0], &WSAProtocolInfo, sizeof(WSAPROTOCOL_INFO));
+			memcpy(&alldata[sizeof(WSAPROTOCOL_INFO)], pMove->GetData(), pMove->GetSize());
+			if (send(transportSocket, (char*) alldata, sendSize, 0) == SOCKET_ERROR) 
+			{
+				wsprintfA(temp, "\r\n[SendError] %ld", WSAGetLastError() );
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+				//WSACleanup();
+				//return 1;
+			}
+			delete [] alldata;
+			//wsprintfA(temp, "\r\n[SendSocket] Size: %d", sendSize );
+			//WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+			// shutdown the connection since no more data will be sent
+			if (shutdown(transportSocket, SD_SEND) == SOCKET_ERROR) 
+			{
+				wsprintfA(temp, "\r\n[ShutdownError] %ld", WSAGetLastError() );
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+				//WSACleanup();
+				//return 1;
+			}
+			closesocket(transportSocket);
+			bSocketTransfered = true;
+
+			CatchRecv = true;
+		}
+
+		break;
+	default:
+		break;
+	}
+
+	CloseHandle(hFile);
 
 	return 0;
 }
 
 
 
-int WINAPI mysocket(int af, int type, int protocol)
+int WSAAPI mysocket(int af, int type, int protocol)
 {
 	//Sleep(500);// test for multithread
 	printf("debug mysocket, af=%d, type=%d, protocol=%d", af, type, protocol);
@@ -568,11 +563,11 @@ int WINAPI mysocket(int af, int type, int protocol)
 	return socket(af, type, protocol);
 }
 
-int WINAPI mysend(SOCKET s,	char *buf, int len,	int flags)
+int WSAAPI mysend(SOCKET s,	const char *buf, int len,	int flags)
 {
 	int ret;
 
-	WriteBinData("send", buf, len, s);
+	WriteBinData("send", (char*)buf, len, s);
 	ret =send(s, (char *)buf, len, flags);
 
 	int err;
@@ -584,7 +579,7 @@ int WINAPI mysend(SOCKET s,	char *buf, int len,	int flags)
 }
 
 int
-WINAPI
+WSAAPI
 myrecv(
     SOCKET s,
     char * buf,
@@ -592,29 +587,29 @@ myrecv(
     IN int flags
     )
 {
-	char mod_name[100];
-	char fname[128];
-	//if(len <=0) return 0;
+	int size = recv(s,buf,len,flags);
 
-	GetFileName(mod_name);
-	if( strstr( mod_name, "asktao" ) != NULL && CatchRecv)
+	//GetFileName(mod_name);
+	if(size > 0 && CatchRecv)
 	{
-		wsprintfA(fname, "c:\\myrecv.log");
+		char fname[128];
+
+		wsprintfA(fname, "c:\\TestLog\\myrecv.log");
 		HANDLE hFile;
 
 		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
 		{
-			WriteLog("open file %s failed", fname);
-			return -1;
+			//WriteLog("open file %s failed", fname);
+			return 0;
 		}
 		SetFilePointer(hFile, 0, NULL, FILE_END);
 
 		char temp[2048];
-		wsprintfA(temp, "\r\n(len=%d) ", len);
+		wsprintfA(temp, "\r\n(len=%d) ", size);
 		DWORD dw;
 		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
 
-		for(int i =0; i<len; i++)
+		for(int i =0; i<size; i++)
 		{
 			wsprintfA(temp, "%02x", buf[i]&0x00FF);
 			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
@@ -623,7 +618,51 @@ myrecv(
 		CloseHandle(hFile);
 	}
 
-	return recv(s,buf,len,flags);
+	return size;
+}
+
+int
+WSAAPI
+myrecv1(
+    IN SOCKET s,
+    __in_ecount(dwBufferCount) __out_data_source(NETWORK) LPWSABUF lpBuffers,
+    IN DWORD dwBufferCount,
+    __out_opt LPDWORD lpNumberOfBytesRecvd,
+    IN OUT LPDWORD lpFlags,
+    __in_opt LPWSAOVERLAPPED lpOverlapped,
+    __in_opt LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
+	)
+{
+	char fname[128];
+	if(dwBufferCount <=0) return 0;
+
+	if(CatchRecv)
+	{
+		wsprintfA(fname, "c:\\TestLog\\myrecv.log");
+		HANDLE hFile;
+
+		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
+		{
+			//WriteLog("open file %s failed", fname);
+			return 0;
+		}
+		SetFilePointer(hFile, 0, NULL, FILE_END);
+
+		char temp[2048];
+		wsprintfA(temp, "\r\n(len=%d) ", dwBufferCount);
+		DWORD dw;
+		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+
+		for(int i =0; i<dwBufferCount; i++)
+		{
+			wsprintfA(temp, "%02x", lpBuffers->buf[i] & 0x00FF);
+			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+		}
+
+		CloseHandle(hFile);
+	}
+
+	return WSARecv(s,lpBuffers,dwBufferCount,lpNumberOfBytesRecvd,lpFlags,lpOverlapped,lpCompletionRoutine);
 }
 
 MYAPIINFO myapi_info[] =
@@ -632,7 +671,7 @@ MYAPIINFO myapi_info[] =
 	{"WS2_32.DLL", "socket", 3, "mysocket"},
 	//{"WS2_32.DLL", "accept", 3, "myaccept"},
 	//{"WS2_32.DLL", "connect", 3, "myconnect"},
-	//{"WS2_32.DLL", "recv", 4, "myrecv"},
+	{"WS2_32.DLL", "recv", 4, "myrecv"},
 	{"WS2_32.DLL", "send", 4, "mysend"},
 	//{"WS2_32.DLL", "sendto", 6, "mysendto"},
 	//{"WS2_32.DLL", "recvfrom", 6, "myrecvfrom"},
