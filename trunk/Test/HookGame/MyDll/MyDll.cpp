@@ -589,81 +589,49 @@ myrecv(
 {
 	int size = recv(s,buf,len,flags);
 
-	//GetFileName(mod_name);
-	if(size > 0 && CatchRecv)
+	char file_name[128];
+	GetFileName(file_name);
+	if( strstr( file_name, "asktao" ) != NULL )
 	{
-		char fname[128];
-
-		wsprintfA(fname, "c:\\TestLog\\myrecv.log");
-		HANDLE hFile;
-
-		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
+		if(size > 0 && CatchRecv)
 		{
-			//WriteLog("open file %s failed", fname);
-			return 0;
-		}
-		SetFilePointer(hFile, 0, NULL, FILE_END);
+			char fname[128];
 
-		char temp[2048];
-		wsprintfA(temp, "\r\n(len=%d) ", size);
-		DWORD dw;
-		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+			wsprintfA(fname, "c:\\TestLog\\myrecv.log");
+			HANDLE hFile;
 
-		for(int i =0; i<size; i++)
-		{
-			wsprintfA(temp, "%02x", buf[i]&0x00FF);
+			if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
+			{
+				//WriteLog("open file %s failed", fname);
+				return size;
+			}
+			SetFilePointer(hFile, 0, NULL, FILE_END);
+
+			char temp[2048];
+			wsprintfA(temp, "\r\n(len=%d) ", size);
+			DWORD dw;
 			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-		}
 
-		CloseHandle(hFile);
+			for(int i =0; i<size; i++)
+			{
+				wsprintfA(temp, "%02x", buf[i]&0x00FF);
+				WriteFile(hFile, temp, strlen(temp), &dw, NULL);
+			}
+
+			CloseHandle(hFile);
+
+			// hack to no recv in client exe
+			buf = 0;
+			len = 0;
+			return 0;
+			// end hack
+		}	
 	}
+	//GetFileName(mod_name);
 
 	return size;
 }
 
-int
-WSAAPI
-myrecv1(
-    IN SOCKET s,
-    __in_ecount(dwBufferCount) __out_data_source(NETWORK) LPWSABUF lpBuffers,
-    IN DWORD dwBufferCount,
-    __out_opt LPDWORD lpNumberOfBytesRecvd,
-    IN OUT LPDWORD lpFlags,
-    __in_opt LPWSAOVERLAPPED lpOverlapped,
-    __in_opt LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine
-	)
-{
-	char fname[128];
-	if(dwBufferCount <=0) return 0;
-
-	if(CatchRecv)
-	{
-		wsprintfA(fname, "c:\\TestLog\\myrecv.log");
-		HANDLE hFile;
-
-		if((hFile =CreateFileA(fname, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) <0)
-		{
-			//WriteLog("open file %s failed", fname);
-			return 0;
-		}
-		SetFilePointer(hFile, 0, NULL, FILE_END);
-
-		char temp[2048];
-		wsprintfA(temp, "\r\n(len=%d) ", dwBufferCount);
-		DWORD dw;
-		WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-
-		for(int i =0; i<dwBufferCount; i++)
-		{
-			wsprintfA(temp, "%02x", lpBuffers->buf[i] & 0x00FF);
-			WriteFile(hFile, temp, strlen(temp), &dw, NULL);
-		}
-
-		CloseHandle(hFile);
-	}
-
-	return WSARecv(s,lpBuffers,dwBufferCount,lpNumberOfBytesRecvd,lpFlags,lpOverlapped,lpCompletionRoutine);
-}
 
 MYAPIINFO myapi_info[] =
 {
