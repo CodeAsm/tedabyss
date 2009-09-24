@@ -1,0 +1,12 @@
+
+Every 10 seconds, hearbeat packet will be sent by client to server.
+
+[Fixed]     [TimeStamp]     [Size]  [?]     [TimeStamp]     [Accumulate time]
+4d5a 0000   0092 7038       000a    10b2    0092 7038       0337 c719
+4d5a 0000   0092 9748       000a    10b2    0092 9748       0337 ee36
+
+4d5a 0000   00a2 7e53       000a    10b2    00a2 7e53       0347 d540
+4d5a 0000   00a2 a583       000a    10b2    00a2 a583       0347 fc63
+
+
+4d5a000000ab7aed00461b010042ebeb25bd64459be346c154eb0ec2abd27b77af0e5bec4e3998094a05051b3bdb66556fff6b05e75db18fd316590b4d3efa818e53d9ffb2a107f233cee10201fe29cb
