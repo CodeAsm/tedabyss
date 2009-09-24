@@ -4,6 +4,8 @@
 #include "stdafx.h"
 #include <winsock2.h>
 
+#include "EndianSwap.h"
+
 //IP Header Structure
 typedef struct ip_hdr
 {
@@ -248,38 +250,62 @@ public:
 
 	void GenerateData()
 	{
-		PacketSize = 18+4*StepNum;
+		WORD packet_len = 18+StepNum*4;
+		PacketSize = packet_len+10;
 		Data = new BYTE[PacketSize];
 
 		INT index = 0;
-		WORD ActionType = (WORD)EActionType_Move;
-		memcpy(&Data[index],&ActionType,2);
-		if( bSwapEndian ) SwapEndian16( &Data[index] );
-		memcpy(&Data[index],&ServerInfo,4);
-		if( bSwapEndian ) SwapEndian32( &Data[index] );
+		DWORD fixed = 0x4d5a0000;
+		WORD action = 0xf0c2;
+
+		WORD short_swap = 0;
+		DWORD long_swap = 0;
+
+		long_swap = LongSwap(fixed);
+		memcpy(&Data[index],&long_swap,4);
 		index += 4;
-		memcpy(&Data[index],&Area,4);
-		if( bSwapEndian ) SwapEndian32( &Data[index] );
+
+		long_swap = LongSwap(TimeStamp);
+		memcpy(&Data[index],&long_swap,4);
 		index += 4;
-		memcpy(&Data[index],&StepNum,2);
-		if( bSwapEndian ) SwapEndian16( &Data[index] );
+
+		short_swap = ShortSwap(packet_len);
+		memcpy(&Data[index],&short_swap,2);
+		index += 2;
+
+		short_swap = ShortSwap(action);
+		memcpy(&Data[index],&short_swap,2);
+		index += 2;
+
+		long_swap = LongSwap(ServerInfo);
+		memcpy(&Data[index],&long_swap,4);
+		index += 4;
+
+		long_swap = LongSwap(Area);
+		memcpy(&Data[index],&long_swap,4);
+		index += 4;
+
+		short_swap = ShortSwap(StepNum);
+		memcpy(&Data[index],&short_swap,2);
 		index += 2;
 
 		for(INT i=0;i<StepNum;i++)
 		{
-			memcpy(&Data[index],&Locations[i].X,2);
-			if( bSwapEndian ) SwapEndian16( &Data[index] );
+			short_swap = ShortSwap(Locations[i].X);
+			memcpy(&Data[index],&short_swap,2);
 			index += 2;
-			memcpy(&Data[index],&Locations[i].Y,2);
-			if( bSwapEndian ) SwapEndian16( &Data[index] );
+
+			short_swap = ShortSwap(Locations[i].Y);
+			memcpy(&Data[index],&short_swap,2);
 			index += 2;
 		}
 
-		memcpy(&Data[index],&FaceDir,2);
-		if( bSwapEndian ) SwapEndian16( &Data[index] );
+		short_swap = ShortSwap(FaceDir);
+		memcpy(&Data[index],&short_swap,2);
 		index += 2;
-		memcpy(&Data[index],&TimeStamp,4);
-		if( bSwapEndian ) SwapEndian32( &Data[index] );
+
+		long_swap = LongSwap(TimeStamp);
+		memcpy(&Data[index],&long_swap,4);
 		index += 4;
 	}
 
@@ -568,15 +594,15 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	while( true )
 	{
-		WORD step_num = 10;
+		WORD step_num = 5;
 		LocationPoint location_ = original_packet.GetLocation(original_packet.GetStepNum()-1);
-		LocationPoint points[10];
-		points[0].X = location_.X;
-		points[0].Y = location_.Y+1; 
+		LocationPoint points[5];
+		points[0].X = location_.X+1;
+		points[0].Y = location_.Y; 
 		for (INT i=1;i<step_num;i++)
 		{
-			points[i].X = points[0].X;
-			points[i].Y = points[0].Y+i;
+			points[i].X = points[0].X+1;
+			points[i].Y = points[0].Y;
 		}
 
 		SYSTEMTIME SysTime;
@@ -586,9 +612,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			+ original_packet.GetTimeStamp();
 
 
-
 		MovePacket test_packet(original_packet.GetServerInfo(),original_packet.GetArea(),step_num,points,original_packet.GetFaceDir(),time_stamp__);
-		if (send(DuplicatedSocket, (char*) test_packet.GetData(), sizeof(test_packet), 0) == SOCKET_ERROR) 
+		if (send(DuplicatedSocket, (char*) test_packet.GetData(), test_packet.GetSize(), 0) == SOCKET_ERROR) 
 		{
 			printf("\r\n[SendError] %ld", WSAGetLastError());
 			//WSACleanup();
